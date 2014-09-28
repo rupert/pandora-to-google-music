@@ -1,0 +1,213 @@
+#!/usr/bin/env python
+
+from gmusicapi import Mobileclient
+import re
+from getpass import getpass
+from termcolor import colored
+from collections import defaultdict
+import requests
+from lxml import html
+import unidecode
+from jaro import jaro_winkler_metric as jaro_winkler
+
+pandora_email = raw_input("Pandora email: ")
+pandora_password = getpass("Pandora password: ")
+gmusic_email = raw_input("Google Music email [%s]: " % pandora_email)
+gmusic_password = getpass("Google Music password: ")
+
+if gmusic_email == "":
+    gmusic_email = pandora_email
+
+gmusic_client = Mobileclient()
+gmusic_client.login(gmusic_email, gmusic_password)
+
+
+def normalise_artist(artist):
+    """ Normalise an artist's name """
+
+    # ASCII representation
+    artist = unidecode.unidecode(artist)
+    artist = unicode(artist)
+
+    # Lowercase
+    artist = artist.lower()
+
+    # Remove secondary artists
+    artist = artist.split(",")[0]
+    artist = re.sub(r"\([^\)]+\)", "", artist)
+
+    # Remove extraneous whitespace
+    artist = re.sub(r"\s{2,}", " ", artist)
+    artist = artist.strip()
+
+    return artist
+
+def fuzzy_artist(artist_a, artist_b):
+    """ Check if the two artists are probably the same """
+
+    artist_a = normalise_artist(artist_a)
+    artist_b = normalise_artist(artist_b)
+    return jaro_winkler(artist_a, artist_b) >= 0.8
+
+def section_heading(heading):
+    """ Underline a heading """
+
+    return "%s\n%s" % (heading, "=" * len(heading))
+
+def fetch_pandora_likes(email, password):
+    s = requests.session()
+
+    r = s.post("https://www.pandora.com/login.vm", data={
+        "login_username": email,
+        "login_password": password,
+    })
+
+    like_start_index = 0
+    thumb_start_index = 0
+
+    liked_songs = defaultdict(list)
+    more_pages = True
+
+    while more_pages:
+        r = s.get("http://www.pandora.com/content/tracklikes", params={
+            "likeStartIndex": like_start_index,
+            "thumbStartIndex": thumb_start_index,
+        })
+
+        tree = html.fromstring(r.text)
+
+        for element in tree.find_class("infobox-body"):
+            title = unicode(element.find("h3").text_content())
+            title = title.strip()
+
+            artist = unicode(element.find("p").text_content())
+            artist = artist.strip()
+            artist = re.sub(r"^by\s+", "", artist)
+
+            station_element = element.find_class("like_context_stationname")[0]
+            station_name = unicode(station_element.text_content())
+            station_name = station_name.strip()
+
+            liked_songs[station_name].append((artist, title))
+
+        more_elements = tree.find_class("show_more")
+
+        # There are more pages
+        if more_elements:
+            like_start_index = more_elements[0].get("data-nextlikestartindex")
+            thumb_start_index = more_elements[0].get("data-nextthumbstartindex")
+        else:
+            more_pages = False
+
+    return liked_songs
+
+pandora_likes = fetch_pandora_likes(pandora_email, pandora_password)
+
+gmusic_match_count = 0
+pandora_like_count = 0
+pandora_stations = defaultdict(list)
+
+for station_name, songs in pandora_likes.items():
+    pandora_like_count += len(songs)
+
+    print
+    print section_heading('Matching "%s"' % station_name)
+
+    for song in songs:
+        # Search Google Music for this song
+        results = gmusic_client.search_all_access("%s - %s" % song)["song_hits"]
+
+        if results:
+            result = results[0]
+
+            # To stop spam songs being added to the playlist we check that
+            # the artists are roughly the same
+            if fuzzy_artist(result["track"]["artist"], song[0]):
+                pandora_stations[station_name].append(result)
+                pandora_stations[None].append(result)
+                gmusic_match_count += 1
+                colour = "green"
+            else:
+                colour = "magenta"
+        else:
+            # No search results
+            colour = "red"
+
+        print colored("%s - %s" % song, colour)
+
+gmusic_playlists = gmusic_client.get_all_user_playlist_contents()
+gmusic_playlist_map = {playlist["name"]: playlist for playlist in gmusic_playlists}
+songs_added = 0
+songs_removed = 0
+
+for pandora_station, pandora_songs in pandora_stations.items():
+    # Playlist containing all songs liked on Pandora
+    if pandora_station is None:
+        pandora_station = "All"
+        gmusic_playlist_name = "Pandora"
+    # Station playlist
+    else:
+        gmusic_playlist_name = "Pandora - %s" % pandora_station
+
+    print
+    print section_heading('Syncing "%s"' % pandora_station)
+
+    pandora_song_map = {song["track"]["nid"]: song for song in pandora_songs}
+
+    # Get the playlist if it already exists
+    gmusic_playlist = gmusic_playlist_map.get(gmusic_playlist_name)
+
+    # Playlist doesn't exist so create it
+    if gmusic_playlist is None:
+        new_playlist = True
+
+        gmusic_playlist_id = gmusic_client.create_playlist(gmusic_playlist_name)
+
+        gmusic_add_song_ids = set(song["track"]["nid"] for song in pandora_songs)
+        gmusic_remove_song_ids = set()
+    # Playlist exists so update it
+    else:
+        new_playlist = False
+
+        gmusic_playlist_id = gmusic_playlist["id"]
+
+        # Find song ids to add and remove from the playlist
+        gmusic_song_map = {song["trackId"]: song for song in gmusic_playlist["tracks"]}
+        gmusic_song_ids = set(gmusic_song_map.keys())
+        pandora_song_ids = set(pandora_song_map.keys())
+        gmusic_add_song_ids = pandora_song_ids - gmusic_song_ids
+        gmusic_remove_song_ids = gmusic_song_ids - pandora_song_ids
+
+    if new_playlist:
+        print colored("New playlist", "blue")
+    else:
+        # Check if the playlist needs to be updated
+        if len(gmusic_add_song_ids) > 0 or len(gmusic_remove_song_ids) > 0:
+            print colored("Updating playlist", "blue")
+        else:
+            print colored("Up to date", "blue")
+            continue
+
+    # Add songs to Google Music playlist
+    gmusic_add_songs = [pandora_song_map[song_id] for song_id in gmusic_add_song_ids]
+    gmusic_client.add_songs_to_playlist(gmusic_playlist_id, [song["track"]["nid"] for song in gmusic_add_songs])
+    songs_added += len(gmusic_add_songs)
+
+    for song in gmusic_add_songs:
+        print colored("%s - %s" % (song["track"]["artist"], song["track"]["title"]), "green")
+
+    # Check if there are songs that need to be removed
+    if gmusic_remove_song_ids:
+        # Remove songs from Google Music playlist
+        gmusic_remove_songs = [gmusic_song_map[song_id] for song_id in gmusic_remove_song_ids]
+        gmusic_client.remove_entries_from_playlist([song["id"] for song in gmusic_remove_songs])
+        songs_removed += len(gmusic_remove_songs)
+
+        for song in gmusic_remove_songs:
+            print colored("%s - %s" % (song["track"]["artist"], song["track"]["title"]), "red")
+
+print
+print section_heading("Summary")
+print "matched %d/%d" % (gmusic_match_count, pandora_like_count)
+print "added %d" % songs_added
+print "removed %d" % songs_removed
