@@ -21,7 +21,6 @@ if gmusic_email == "":
 gmusic_client = Mobileclient()
 gmusic_client.login(gmusic_email, gmusic_password)
 
-
 def normalise_artist(artist):
     """ Normalise an artist's name """
 
