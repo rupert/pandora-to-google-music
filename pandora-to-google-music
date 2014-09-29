@@ -108,6 +108,8 @@ def search_gmusic(gmusic_client, artist, title):
         yield gmusic_client.search_all_access(artist + " " + title)["song_hits"]
 
     artist = normalise_metadata(artist)
+
+    # No match
     status = 0
     best_match = None
 
@@ -115,9 +117,10 @@ def search_gmusic(gmusic_client, artist, title):
         if results:
             result = results[0]
 
-            # To stop spam songs being added to the playlist we check that
+            # To stop spam songs being added to the playlist check that
             # the artists are roughly the same
             if fuzzy_artist(normalise_metadata(result["track"]["artist"]), artist):
+                # Good match
                 status = 2
                 best_match = result
                 break
