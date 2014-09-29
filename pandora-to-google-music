@@ -33,7 +33,7 @@ def normalise_metadata(value):
 
     # Remove secondary artists
     value = value.split(",")[0]
-    value = re.sub(r"\([^\)]+\)", "", value)
+    value = re.sub(r"\([^\)]+\)|\[[^\]]+\]", "", value)
     value = re.sub(r"\bf(ea)?t\.?\b.+", "", value)
 
     # Remove extraneous whitespace
@@ -42,17 +42,27 @@ def normalise_metadata(value):
 
     return value
 
-def fuzzy_artist(artist_a, artist_b):
+def fuzzy_artist_match(artist_a, artist_b):
     """ Check if the two artists are probably the same """
 
     return jaro_winkler(artist_a, artist_b) >= 0.7
 
-def section_heading(heading):
-    """ Underline a heading """
+def print_section_heading(heading):
+    """ Print an underlined heading """
 
-    return "%s\n%s" % (heading, "=" * len(heading))
+    print
+    print "%s\n%s" % (heading, "=" * len(heading))
 
-def fetch_pandora_likes(email, password):
+def print_gmusic_song(song, colour):
+    print colored("%s - %s" % (song["track"]["artist"], song["track"]["title"]), colour)
+
+def print_gmusic_songs(songs, colour):
+    for song in songs:
+        print_gmusic_song(song, colour)
+
+def scrape_pandora_likes(email, password):
+    """ Scrape likes from the Pandora web interface """
+
     s = requests.session()
 
     r = s.post("https://www.pandora.com/login.vm", data={
@@ -100,12 +110,14 @@ def fetch_pandora_likes(email, password):
     return liked_songs
 
 def search_gmusic(gmusic_client, artist, title):
-    def _search_gmusic(gmusic_client, artist, title):
-        yield gmusic_client.search_all_access(artist + " " + title)["song_hits"]
+    """ Search Google Music for a song, returns the best match """
+
+    def _search_strings(artist, title):
+        yield artist + " " + title
 
         # Search again with the title normalised too
         title = normalise_metadata(title)
-        yield gmusic_client.search_all_access(artist + " " + title)["song_hits"]
+        yield artist + " " + title
 
     artist = normalise_metadata(artist)
 
@@ -113,13 +125,15 @@ def search_gmusic(gmusic_client, artist, title):
     status = 0
     best_match = None
 
-    for results in _search_gmusic(gmusic_client, artist, title):
+    for search_string in _search_strings(artist, title):
+        results = gmusic_client.search_all_access(search_string)["song_hits"]
+
         if results:
             result = results[0]
 
             # To stop spam songs being added to the playlist check that
             # the artists are roughly the same
-            if fuzzy_artist(normalise_metadata(result["track"]["artist"]), artist):
+            if fuzzy_artist_match(normalise_metadata(result["track"]["artist"]), artist):
                 # Good match
                 status = 2
                 best_match = result
@@ -131,7 +145,7 @@ def search_gmusic(gmusic_client, artist, title):
 
     return status, best_match
 
-pandora_likes = fetch_pandora_likes(pandora_email, pandora_password)
+pandora_likes = scrape_pandora_likes(pandora_email, pandora_password)
 
 gmusic_match_count = 0
 pandora_like_count = 0
@@ -141,8 +155,7 @@ pandora_stations = defaultdict(list)
 for station_name, songs in pandora_likes.items():
     pandora_like_count += len(songs)
 
-    print
-    print section_heading('Matching "%s"' % station_name)
+    print_section_heading('Matching "%s"' % station_name)
 
     for song in songs:
         artist, title = song
@@ -176,8 +189,7 @@ for pandora_station, pandora_songs in pandora_stations.items():
     else:
         gmusic_playlist_name = "Pandora - %s" % pandora_station
 
-    print
-    print section_heading('Syncing "%s"' % pandora_station)
+    print_section_heading('Syncing "%s"' % pandora_station)
 
     pandora_song_map = {song["track"]["nid"]: song for song in pandora_songs}
 
@@ -216,25 +228,23 @@ for pandora_station, pandora_songs in pandora_stations.items():
             continue
 
     # Add songs to Google Music playlist
-    gmusic_add_songs = [pandora_song_map[song_id] for song_id in gmusic_add_song_ids]
-    gmusic_client.add_songs_to_playlist(gmusic_playlist_id, [song["track"]["nid"] for song in gmusic_add_songs])
-    songs_added += len(gmusic_add_songs)
+    gmusic_client.add_songs_to_playlist(gmusic_playlist_id, list(gmusic_add_song_ids))
+    songs_added += len(gmusic_add_song_ids)
 
-    for song in gmusic_add_songs:
-        print colored("%s - %s" % (song["track"]["artist"], song["track"]["title"]), "green")
+    gmusic_add_songs = [pandora_song_map[song_id] for song_id in gmusic_add_song_ids]
+
+    print_gmusic_songs(gmusic_add_songs, "green")
 
     # Check if there are songs that need to be removed
     if gmusic_remove_song_ids:
         # Remove songs from Google Music playlist
         gmusic_remove_songs = [gmusic_song_map[song_id] for song_id in gmusic_remove_song_ids]
         gmusic_client.remove_entries_from_playlist([song["id"] for song in gmusic_remove_songs])
-        songs_removed += len(gmusic_remove_songs)
+        songs_removed += len(gmusic_remove_song_ids)
 
-        for song in gmusic_remove_songs:
-            print colored("%s - %s" % (song["track"]["artist"], song["track"]["title"]), "red")
+        print_gmusic_songs(gmusic_remove_songs, "red")
 
-print
-print section_heading("Summary")
+print_section_heading("Summary")
 print "matched %d/%d" % (gmusic_match_count, pandora_like_count)
 print "added %d" % songs_added
 print "removed %d" % songs_removed
