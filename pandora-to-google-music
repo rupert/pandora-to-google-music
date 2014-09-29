@@ -31,7 +31,7 @@ def normalise_metadata(value):
     # Lowercase
     value = value.lower()
 
-    # Remove secondary values
+    # Remove secondary artists
     value = value.split(",")[0]
     value = re.sub(r"\([^\)]+\)", "", value)
     value = re.sub(r"\bf(ea)?t\.?\b.+", "", value)
@@ -137,6 +137,7 @@ gmusic_match_count = 0
 pandora_like_count = 0
 pandora_stations = defaultdict(list)
 
+# Match Pandora likes with Google Music
 for station_name, songs in pandora_likes.items():
     pandora_like_count += len(songs)
 
@@ -165,6 +166,7 @@ gmusic_playlist_map = {playlist["name"]: playlist for playlist in gmusic_playlis
 songs_added = 0
 songs_removed = 0
 
+# Update Google Music playlists
 for pandora_station, pandora_songs in pandora_stations.items():
     # Playlist containing all songs liked on Pandora
     if pandora_station is None:
