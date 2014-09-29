@@ -21,32 +21,31 @@ if gmusic_email == "":
 gmusic_client = Mobileclient()
 gmusic_client.login(gmusic_email, gmusic_password)
 
-def normalise_artist(artist):
-    """ Normalise an artist's name """
+def normalise_metadata(value):
+    """ Normalise a piece of song metadata for searching """
 
     # ASCII representation
-    artist = unidecode.unidecode(artist)
-    artist = unicode(artist)
+    value = unidecode.unidecode(value)
+    value = unicode(value)
 
     # Lowercase
-    artist = artist.lower()
+    value = value.lower()
 
-    # Remove secondary artists
-    artist = artist.split(",")[0]
-    artist = re.sub(r"\([^\)]+\)", "", artist)
+    # Remove secondary values
+    value = value.split(",")[0]
+    value = re.sub(r"\([^\)]+\)", "", value)
+    value = re.sub(r"\bf(ea)?t\.?\b.+", "", value)
 
     # Remove extraneous whitespace
-    artist = re.sub(r"\s{2,}", " ", artist)
-    artist = artist.strip()
+    value = re.sub(r"\s{2,}", " ", value)
+    value = value.strip()
 
-    return artist
+    return value
 
 def fuzzy_artist(artist_a, artist_b):
     """ Check if the two artists are probably the same """
 
-    artist_a = normalise_artist(artist_a)
-    artist_b = normalise_artist(artist_b)
-    return jaro_winkler(artist_a, artist_b) >= 0.8
+    return jaro_winkler(artist_a, artist_b) >= 0.7
 
 def section_heading(heading):
     """ Underline a heading """
@@ -100,6 +99,35 @@ def fetch_pandora_likes(email, password):
 
     return liked_songs
 
+def search_gmusic(gmusic_client, artist, title):
+    def _search_gmusic(gmusic_client, artist, title):
+        yield gmusic_client.search_all_access(artist + " " + title)["song_hits"]
+
+        # Search again with the title normalised too
+        title = normalise_metadata(title)
+        yield gmusic_client.search_all_access(artist + " " + title)["song_hits"]
+
+    artist = normalise_metadata(artist)
+    status = 0
+    best_match = None
+
+    for results in _search_gmusic(gmusic_client, artist, title):
+        if results:
+            result = results[0]
+
+            # To stop spam songs being added to the playlist we check that
+            # the artists are roughly the same
+            if fuzzy_artist(normalise_metadata(result["track"]["artist"]), artist):
+                status = 2
+                best_match = result
+                break
+            elif status == 0:
+                # Spam
+                status = 1
+                best_match = result
+
+    return status, best_match
+
 pandora_likes = fetch_pandora_likes(pandora_email, pandora_password)
 
 gmusic_match_count = 0
@@ -113,26 +141,21 @@ for station_name, songs in pandora_likes.items():
     print section_heading('Matching "%s"' % station_name)
 
     for song in songs:
-        # Search Google Music for this song
-        results = gmusic_client.search_all_access("%s - %s" % song)["song_hits"]
+        artist, title = song
 
-        if results:
-            result = results[0]
+        status, match = search_gmusic(gmusic_client, artist, title)
 
-            # To stop spam songs being added to the playlist we check that
-            # the artists are roughly the same
-            if fuzzy_artist(result["track"]["artist"], song[0]):
-                pandora_stations[station_name].append(result)
-                pandora_stations[None].append(result)
-                gmusic_match_count += 1
-                colour = "green"
-            else:
-                colour = "magenta"
+        if status == 2:
+            pandora_stations[station_name].append(match)
+            pandora_stations[None].append(match)
+            gmusic_match_count += 1
+            colour = "green"
+        elif status == 1:
+            colour = "magenta"
         else:
-            # No search results
             colour = "red"
 
-        print colored("%s - %s" % song, colour)
+        print colored("%s - %s" % (artist, title), colour)
 
 gmusic_playlists = gmusic_client.get_all_user_playlist_contents()
 gmusic_playlist_map = {playlist["name"]: playlist for playlist in gmusic_playlists}
