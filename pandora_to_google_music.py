@@ -250,7 +250,6 @@ def sync_gmusic_playlists(client, playlists):
             songs_added += len(song_ids_to_add)
 
             songs_to_add = [song_map[x] for x in song_ids_to_add]
-
             print_gmusic_songs(songs_to_add, "+", "green")
 
         # Check if there are songs that need to be removed
