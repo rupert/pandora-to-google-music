@@ -4,7 +4,7 @@ After running the script you will have a "Pandora" playlist with all of the song
 There will also be playlists for each station that has liked songs.
 The format for these is "Pandora - STATION NAME".
 
-## Install
+## Dependencies
 
 ```bash
 # lxml dependencies
