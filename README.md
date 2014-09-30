@@ -18,7 +18,7 @@ pip install -r requirements.txt
 ## Usage
 
 ```bash
-./pandora-to-google-music
+python pandora_to_google_music.py
 ```
 
 1. You will be asked for your Pandora and Google Music credentials
