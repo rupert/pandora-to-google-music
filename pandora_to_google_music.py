@@ -274,7 +274,7 @@ def pandora_to_google_music(pandora_email, pandora_password, gmusic_email, gmusi
     pandora_like_count = sum(len(x) for x in pandora_likes.values())
 
     playlists = match_pandora_with_gmusic(pandora_likes, gmusic_client)
-    gmusic_match_count = len(playlists.get(None, []))
+    gmusic_match_count = len(playlists.get("Pandora", []))
 
     songs_added, songs_removed = sync_gmusic_playlists(gmusic_client, playlists)
 
