@@ -20,9 +20,11 @@ pip install -r requirements.txt
 ```bash
 python pandora_to_google_music.py
 ```
+As the script I will:
 
-1. You will be asked for your Pandora and Google Music credentials
-1. The script will then scrape your liked songs from Pandora
-1. It will then search for these songs in Google Music
-1. Songs that match are added to Google Music playlists
-1. Enjoy!
+1. Ask for your Pandora and Google Music login details
+1. Scrape your likes from Pandora
+1. Match these songs with Google Music
+1. Add the songs that match to Google playlists
+
+Enjoy!
