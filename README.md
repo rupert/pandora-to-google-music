@@ -25,6 +25,6 @@ As the script I will:
 1. Ask for your Pandora and Google Music login details
 1. Scrape your likes from Pandora
 1. Match these songs with Google Music
-1. Add the songs that match to Google playlists
+1. Add the songs that match to Google Music playlists
 
 Enjoy!
