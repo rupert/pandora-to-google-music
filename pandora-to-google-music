@@ -92,9 +92,14 @@ def scrape_pandora_likes(email, password):
             artist = artist.strip()
             artist = re.sub(r"^by\s+", "", artist)
 
-            station_element = element.find_class("like_context_stationname")[0]
-            station_name = unicode(station_element.text_content())
-            station_name = station_name.strip()
+            station_elements = element.find_class("like_context_stationname")
+
+            if station_elements:
+                station_name = unicode(station_elements[0].text_content())
+                station_name = station_name.strip()
+            else:
+                # Bookmarked song
+                station_name = None
 
             liked_songs[station_name].append((artist, title))
 
@@ -149,13 +154,16 @@ pandora_likes = scrape_pandora_likes(pandora_email, pandora_password)
 
 gmusic_match_count = 0
 pandora_like_count = 0
-pandora_stations = defaultdict(list)
+pandora_playlists = defaultdict(list)
 
 # Match Pandora likes with Google Music
 for station_name, songs in pandora_likes.items():
     pandora_like_count += len(songs)
 
-    print_section_heading('Matching "%s"' % station_name)
+    if station_name:
+        print_section_heading('Matching "%s"' % station_name)
+    else:
+        print_section_heading('Matching Bookmarks')
 
     for song in songs:
         artist, title = song
@@ -163,8 +171,11 @@ for station_name, songs in pandora_likes.items():
         status, match = search_gmusic(gmusic_client, artist, title)
 
         if status == 2:
-            pandora_stations[station_name].append(match)
-            pandora_stations[None].append(match)
+            if station_name:
+                pandora_playlists[station_name].append(match)
+
+            pandora_playlists[None].append(match)
+
             gmusic_match_count += 1
             colour = "green"
         elif status == 1:
@@ -180,16 +191,16 @@ songs_added = 0
 songs_removed = 0
 
 # Update Google Music playlists
-for pandora_station, pandora_songs in pandora_stations.items():
+for pandora_station_name, pandora_songs in pandora_playlists.items():
     # Playlist containing all songs liked on Pandora
-    if pandora_station is None:
-        pandora_station = "All"
+    if pandora_station_name is None:
+        pandora_station_name = "All"
         gmusic_playlist_name = "Pandora"
     # Station playlist
     else:
-        gmusic_playlist_name = "Pandora - %s" % pandora_station
+        gmusic_playlist_name = "Pandora - %s" % pandora_station_name
 
-    print_section_heading('Syncing "%s"' % pandora_station)
+    print_section_heading('Syncing "%s"' % pandora_station_name)
 
     pandora_song_map = {song["track"]["nid"]: song for song in pandora_songs}
 
