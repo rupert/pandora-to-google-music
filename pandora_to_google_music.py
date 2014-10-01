@@ -13,6 +13,69 @@ from jaro import jaro_winkler_metric as jaro_winkler
 
 PANDORA_LOGIN_URL = "https://www.pandora.com/login.vm"
 PANDORA_LIKES_URL = "http://www.pandora.com/content/tracklikes"
+PANDORA_STATIONS_URL = "http://www.pandora.com/content/stations"
+
+class LoginException(Exception):
+    pass
+
+class PandoraClient(object):
+    def __init__(self, email, password):
+        self.session = requests.session()
+
+        response = self.session.post(PANDORA_LOGIN_URL, data={
+            "login_username": email,
+            "login_password": password,
+        })
+
+        if "0;url=http://www.pandora.com/people/" not in response.text:
+            raise LoginException("Pandora login failed, check email and password")
+
+    def liked_tracks(self):
+        """ Scrape likes from the Pandora web interface """
+
+        like_start_index = 0
+        thumb_start_index = 0
+
+        tracks = defaultdict(list)
+        more_pages = True
+
+        while more_pages:
+            response = self.session.get(PANDORA_LIKES_URL, params={
+                "likeStartIndex": like_start_index,
+                "thumbStartIndex": thumb_start_index,
+            })
+
+            tree = html.fromstring(response.text)
+
+            for element in tree.find_class("infobox-body"):
+                title = unicode(element.find("h3").text_content())
+                title = title.strip()
+
+                artist = unicode(element.find("p").text_content())
+                artist = artist.strip()
+                artist = re.sub(r"^by\s+", "", artist)
+
+                station_elements = element.find_class("like_context_stationname")
+
+                if station_elements:
+                    station_name = unicode(station_elements[0].text_content())
+                    station_name = station_name.strip()
+                else:
+                    # Bookmarked track
+                    station_name = None
+
+                tracks[station_name].append((artist, title))
+
+            more_elements = tree.find_class("show_more")
+
+            # There are more pages
+            if more_elements:
+                like_start_index = more_elements[0].get("data-nextlikestartindex")
+                thumb_start_index = more_elements[0].get("data-nextthumbstartindex")
+            else:
+                more_pages = False
+
+        return tracks
 
 def normalise_metadata(value):
     """ Normalise a piece of song metadata for searching """
@@ -65,60 +128,6 @@ def print_gmusic_songs(songs, indicator, colour):
         artist = song["track"]["artist"]
         title = song["track"]["title"]
         print_song(artist, title, indicator, colour)
-
-def scrape_pandora_likes(email, password):
-    """ Scrape likes from the Pandora web interface """
-
-    session = requests.session()
-
-    response = session.post(PANDORA_LOGIN_URL, data={
-        "login_username": email,
-        "login_password": password,
-    })
-
-    like_start_index = 0
-    thumb_start_index = 0
-
-    liked_songs = defaultdict(list)
-    more_pages = True
-
-    while more_pages:
-        response = session.get(PANDORA_LIKES_URL, params={
-            "likeStartIndex": like_start_index,
-            "thumbStartIndex": thumb_start_index,
-        })
-
-        tree = html.fromstring(response.text)
-
-        for element in tree.find_class("infobox-body"):
-            title = unicode(element.find("h3").text_content())
-            title = title.strip()
-
-            artist = unicode(element.find("p").text_content())
-            artist = artist.strip()
-            artist = re.sub(r"^by\s+", "", artist)
-
-            station_elements = element.find_class("like_context_stationname")
-
-            if station_elements:
-                station_name = unicode(station_elements[0].text_content())
-                station_name = station_name.strip()
-            else:
-                # Bookmarked song
-                station_name = None
-
-            liked_songs[station_name].append((artist, title))
-
-        more_elements = tree.find_class("show_more")
-
-        # There are more pages
-        if more_elements:
-            like_start_index = more_elements[0].get("data-nextlikestartindex")
-            thumb_start_index = more_elements[0].get("data-nextthumbstartindex")
-        else:
-            more_pages = False
-
-    return liked_songs
 
 def search_gmusic(gmusic_client, artist, title):
     """ Search Google Music for a song, returns the best match """
@@ -270,7 +279,9 @@ def pandora_to_google_music(pandora_email, pandora_password, gmusic_email, gmusi
     gmusic_client = Mobileclient()
     gmusic_client.login(gmusic_email, gmusic_password)
 
-    pandora_likes = scrape_pandora_likes(pandora_email, pandora_password)
+    pandora_client = PandoraClient(pandora_email, pandora_password)
+
+    pandora_likes = pandora_client.liked_tracks()
     pandora_like_count = sum(len(x) for x in pandora_likes.values())
 
     playlists = match_pandora_with_gmusic(pandora_likes, gmusic_client)
