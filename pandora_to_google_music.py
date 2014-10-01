@@ -310,9 +310,6 @@ def pandora_to_google_music(pandora_email, pandora_password, gmusic_email, gmusi
             pandora_likes[None].extend(pandora_likes[station])
             del pandora_likes[station]
 
-    # Remove deleted stations (songs will be kept in "Pandora" playlist)
-    pandora_likes = dict((k, v) for k, v in pandora_likes.items() if k is None or k in pandora_stations)
-
     # Match Pandora likes with Google Music
     playlists = match_pandora_with_gmusic(pandora_likes, gmusic_client)
     gmusic_match_count = len(playlists.get("Pandora", []))
