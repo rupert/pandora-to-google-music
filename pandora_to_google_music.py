@@ -11,18 +11,18 @@ from lxml import html
 import unidecode
 from jaro import jaro_winkler_metric as jaro_winkler
 
-PANDORA_LOGIN_URL = "https://www.pandora.com/login.vm"
-PANDORA_LIKES_URL = "http://www.pandora.com/content/tracklikes"
-PANDORA_STATIONS_URL = "http://www.pandora.com/content/stations"
-
 class LoginException(Exception):
     pass
 
 class PandoraClient(object):
+    LOGIN_URL = "https://www.pandora.com/login.vm"
+    LIKES_URL = "http://www.pandora.com/content/tracklikes"
+    STATIONS_URL = "http://www.pandora.com/content/stations"
+
     def __init__(self, email, password):
         self.session = requests.session()
 
-        response = self.session.post(PANDORA_LOGIN_URL, data={
+        response = self.session.post(PandoraClient.LOGIN_URL, data={
             "login_username": email,
             "login_password": password,
         })
@@ -40,7 +40,7 @@ class PandoraClient(object):
         more_pages = True
 
         while more_pages:
-            response = self.session.get(PANDORA_LIKES_URL, params={
+            response = self.session.get(PandoraClient.LIKES_URL, params={
                 "likeStartIndex": like_start_index,
                 "thumbStartIndex": thumb_start_index,
             })
@@ -76,6 +76,20 @@ class PandoraClient(object):
                 more_pages = False
 
         return tracks
+
+    def stations(self):
+        """ Scrape station names from the Pandora web interface """
+
+        response = self.session.get(PandoraClient.STATIONS_URL)
+        tree = html.fromstring(response.text)
+
+        stations = []
+
+        for element in tree.findall(".//h3"):
+            station_name = unicode(element.text_content().strip())
+            stations.append(station_name)
+
+        return stations
 
 def normalise_metadata(value):
     """ Normalise a piece of song metadata for searching """
@@ -178,7 +192,7 @@ def match_pandora_with_gmusic(pandora_likes, gmusic_client):
         if station_name:
             print_section_heading('Matching "%s"' % station_name)
         else:
-            print_section_heading('Matching Bookmarks')
+            print_section_heading("Matching")
 
         for song in songs:
             artist, title = song
@@ -281,12 +295,29 @@ def pandora_to_google_music(pandora_email, pandora_password, gmusic_email, gmusi
 
     pandora_client = PandoraClient(pandora_email, pandora_password)
 
+    # Get liked Pandora tracks
     pandora_likes = pandora_client.liked_tracks()
     pandora_like_count = sum(len(x) for x in pandora_likes.values())
 
+    # Get Pandora stations
+    pandora_stations = set(pandora_client.stations())
+
+    # Move songs from deleted stations to the main playlist
+    for station in list(pandora_likes.keys()):
+        # Station has been deleted
+        if station not in pandora_stations:
+            # Move the songs
+            pandora_likes[None].extend(pandora_likes[station])
+            del pandora_likes[station]
+
+    # Remove deleted stations (songs will be kept in "Pandora" playlist)
+    pandora_likes = dict((k, v) for k, v in pandora_likes.items() if k is None or k in pandora_stations)
+
+    # Match Pandora likes with Google Music
     playlists = match_pandora_with_gmusic(pandora_likes, gmusic_client)
     gmusic_match_count = len(playlists.get("Pandora", []))
 
+    # Sync Google Music playlists
     songs_added, songs_removed = sync_gmusic_playlists(gmusic_client, playlists)
 
     print_section_heading("Summary")
