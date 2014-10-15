@@ -7,9 +7,13 @@ The format for these is "Pandora - STATION NAME".
 ## Dependencies
 
 ```bash
-# lxml dependencies
+# Step 1: Install lxml dependencies
+# In CentOS/Fedora:
 yum install libxml2-devel libxslt-devel
+# or in Ubuntu/Debian:
+apt-get install libxml2-dev libxslt-dev
 
+# Step 2: Install python libraries
 virtualenv venv
 source venv/bin/activate
 pip install -r requirements.txt
