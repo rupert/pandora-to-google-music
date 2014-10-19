@@ -3,13 +3,13 @@
 import re
 from getpass import getpass
 from collections import defaultdict
+import difflib
 
 import requests
 from gmusicapi import Mobileclient
 from termcolor import colored
 from lxml import html
 import unidecode
-from jaro import jaro_winkler_metric as jaro_winkler
 
 class LoginException(Exception):
     pass
@@ -115,7 +115,7 @@ def normalise_metadata(value):
 def fuzzy_artist_match(artist_a, artist_b):
     """ Check if the two artists are probably the same """
 
-    return jaro_winkler(artist_a, artist_b) >= 0.7
+    return difflib.SequenceMatcher(None, artist_a, artist_b).ratio() >= 0.6
 
 def print_section_heading(heading):
     """ Print an underlined heading """
