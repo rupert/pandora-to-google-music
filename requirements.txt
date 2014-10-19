@@ -3,7 +3,6 @@ appdirs==1.4.0
 decorator==3.4.0
 gmusicapi==4.0.0
 httplib2==0.9
-jaro-winkler==1.0.2
 lxml==3.4.0
 mock==1.0.1
 mutagen==1.24
