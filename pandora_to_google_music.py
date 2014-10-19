@@ -91,7 +91,7 @@ class PandoraClient(object):
 
         return stations
 
-def normalise_metadata(value):
+def normalise_metadata1(value):
     """ Normalise a piece of song metadata for searching """
 
     # ASCII representation
@@ -101,10 +101,11 @@ def normalise_metadata(value):
     # Lowercase
     value = value.lower()
 
-    # Remove secondary artists
-    value = value.split(",")[0]
+    # Remove secondary artists (after comma or "ft.")
+    value = re.split(r",|\bf(ea)?t\.?\b", value, 2)[0].strip()
+
+    # Remove Anything in brackets
     value = re.sub(r"\([^\)]+\)|\[[^\]]+\]", "", value)
-    value = re.sub(r"\bf(ea)?t\.?\b.+", "", value)
 
     # Remove extraneous whitespace
     value = re.sub(r"\s{2,}", " ", value)
@@ -112,10 +113,41 @@ def normalise_metadata(value):
 
     return value
 
-def fuzzy_artist_match(artist_a, artist_b):
-    """ Check if the two artists are probably the same """
+def normalise_metadata2(value):
+    """
+    More aggressive metadata normalisation
 
-    return difflib.SequenceMatcher(None, artist_a, artist_b).ratio() >= 0.6
+    Assumes value has been normalised using normalise_metadata1 already.
+    """
+
+    # Remove "the" from the start
+    value = value.lstrip("the").lstrip(" ")
+
+    # Remove anything after "and" or "&"
+    value = re.split(r"\s(and|&)\s", value, 2)[0].strip()
+
+    return value
+
+def metadata_normaliser(*args):
+    """ Increasingly normalised values for searching/comparison """
+
+    values = args
+    yield values
+
+    values = [normalise_metadata1(x) for x in values]
+    yield values
+
+    values = [normalise_metadata2(x) for x in values]
+    yield values
+
+def is_spam_artist(artist_a, artist_b):
+    """ Check if an artist match is spam/cover """
+
+    for a, b in metadata_normaliser(artist_a, artist_b):
+        if difflib.SequenceMatcher(None, a, b).ratio() >= 0.6:
+            return False
+
+    return True
 
 def print_section_heading(heading):
     """ Print an underlined heading """
@@ -146,32 +178,20 @@ def print_gmusic_songs(songs, indicator, colour):
 def search_gmusic(gmusic_client, artist, title):
     """ Search Google Music for a song, returns the best match """
 
-    def _search_strings(artist, title):
-        """ Increasingly generic search strings """
-
-        yield artist + " " + title
-
-        # Search again with the title normalised too
-        title = normalise_metadata(title)
-        yield artist + " " + title
-
-    artist = normalise_metadata(artist)
-
     # No match
     status = 0
     best_match = None
 
-    for search_string in _search_strings(artist, title):
+    for search_artist, search_title in metadata_normaliser(artist, title):
+        search_string = search_artist + " " + search_title
         results = gmusic_client.search_all_access(search_string)["song_hits"]
 
-        if results:
-            result = results[0]
-
-            gmusic_artist = normalise_metadata(result["track"]["artist"])
+        for result in results:
+            gmusic_artist = result["track"]["artist"]
 
             # To stop spam songs being added to the playlist check that
             # the artists are roughly the same
-            if fuzzy_artist_match(gmusic_artist, artist):
+            if not is_spam_artist(gmusic_artist, artist):
                 # Good match
                 status = 2
                 best_match = result
@@ -180,6 +200,10 @@ def search_gmusic(gmusic_client, artist, title):
                 # Spam
                 status = 1
                 best_match = result
+
+        # Good match found
+        if status == 2:
+            break
 
     return status, best_match
 
