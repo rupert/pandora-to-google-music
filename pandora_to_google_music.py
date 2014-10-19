@@ -38,12 +38,15 @@ class PandoraClient(object):
 
         tracks = defaultdict(list)
         more_pages = True
+        page = 1
 
         while more_pages:
             response = self.session.get(PandoraClient.LIKES_URL, params={
                 "likeStartIndex": like_start_index,
                 "thumbStartIndex": thumb_start_index,
             })
+
+            print_section_heading('Fetching Pandora Likes (page %d)' % page)
 
             tree = html.fromstring(response.text)
 
@@ -64,7 +67,10 @@ class PandoraClient(object):
                     # Bookmarked track
                     station_name = None
 
+
                 tracks[station_name].append((artist, title))
+
+                print_song(artist, title)
 
             more_elements = tree.find_class("show_more")
 
@@ -74,6 +80,9 @@ class PandoraClient(object):
                 thumb_start_index = more_elements[0].get("data-nextthumbstartindex")
             else:
                 more_pages = False
+
+
+            page += 1
 
         return tracks
 
@@ -104,7 +113,7 @@ def normalise_metadata1(value):
     # Remove secondary artists (after comma or "ft.")
     value = re.split(r",|\bf(ea)?t\.?\b", value, 2)[0].strip()
 
-    # Remove Anything in brackets
+    # Remove anything in brackets
     value = re.sub(r"\([^\)]+\)|\[[^\]]+\]", "", value)
 
     # Remove extraneous whitespace
@@ -155,11 +164,14 @@ def print_section_heading(heading):
     print
     print u"%s\n%s" % (heading, "=" * len(heading))
 
-def print_song(artist, title, indicator, colour):
+def print_song(artist, title, indicator="", colour=None):
     """ Print a song """
 
+    if indicator:
+        indicator = "[%s] " % indicator
+
     print colored(
-        u"[{indicator}] {artist} - {title}".format(
+        u"{indicator}{artist} - {title}".format(
             indicator=indicator,
             artist=artist,
             title=title
@@ -281,13 +293,13 @@ def sync_gmusic_playlists(client, playlists):
             song_ids_to_remove = gmusic_song_ids - song_ids
 
         if new_playlist:
-            print colored("New playlist", "blue")
+            print "New playlist"
         else:
             # Check if the playlist needs to be updated
             if len(song_ids_to_add) > 0 or len(song_ids_to_remove) > 0:
-                print colored("Updating playlist", "blue")
+                print "Updating playlist"
             else:
-                print colored("Up to date", "blue")
+                print "Up to date"
                 continue
 
         # Check if there are songs that need to be added
