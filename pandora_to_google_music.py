@@ -2,9 +2,9 @@
 
 import re
 from getpass import getpass
-import requests
 from collections import defaultdict
 
+import requests
 from gmusicapi import Mobileclient
 from termcolor import colored
 from lxml import html
@@ -190,9 +190,9 @@ def match_pandora_with_gmusic(pandora_likes, gmusic_client):
 
     for station_name, songs in pandora_likes.items():
         if station_name:
-            print_section_heading('Matching "%s"' % station_name)
+            print_section_heading('Matching "%s" (%d songs)' % (station_name, len(songs)))
         else:
-            print_section_heading("Matching")
+            print_section_heading("Matching (%d songs)" % len(songs))
 
         for song in songs:
             artist, title = song
@@ -228,9 +228,10 @@ def sync_gmusic_playlists(client, playlists):
 
     # Update Google Music playlists
     for playlist_name, songs in playlists.items():
-        print_section_heading('Syncing "%s"' % playlist_name)
-
         song_map = {song["track"]["nid"]: song for song in songs}
+        song_ids = set(song_map.keys())
+
+        print_section_heading('Syncing "%s" (%d songs)' % (playlist_name, len(song_ids)))
 
         # Get the playlist if it already exists
         gmusic_playlist = gmusic_playlist_map.get(playlist_name)
@@ -241,7 +242,7 @@ def sync_gmusic_playlists(client, playlists):
 
             gmusic_playlist_id = client.create_playlist(playlist_name)
 
-            song_ids_to_add = set(song["track"]["nid"] for song in songs)
+            song_ids_to_add = song_ids
             song_ids_to_remove = set()
         # Playlist exists so update it
         else:
@@ -252,9 +253,8 @@ def sync_gmusic_playlists(client, playlists):
             # Find song ids to add and remove from the playlist
             gmusic_song_map = {song["trackId"]: song for song in gmusic_playlist["tracks"]}
             gmusic_song_ids = set(gmusic_song_map.keys())
-            new_song_ids = set(song_map.keys())
-            song_ids_to_add = new_song_ids - gmusic_song_ids
-            song_ids_to_remove = gmusic_song_ids - new_song_ids
+            song_ids_to_add = song_ids - gmusic_song_ids
+            song_ids_to_remove = gmusic_song_ids - song_ids
 
         if new_playlist:
             print colored("New playlist", "blue")
