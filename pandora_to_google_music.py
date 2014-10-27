@@ -219,39 +219,39 @@ def search_gmusic(gmusic_client, artist, title):
 
     return status, best_match
 
-def match_pandora_with_gmusic(pandora_likes, gmusic_client):
-    """ Match Pandora likes with Google Music """
+def match_songs_with_gmusic(gmusic_client, songs):
+    """ Match songs with Google Music """
 
-    pandora_playlists = defaultdict(list)
+    matched_songs = []
 
-    for station_name, songs in pandora_likes.items():
-        if station_name:
-            print_section_heading('Matching "%s" (%d songs)' % (station_name, len(songs)))
+    for song in songs:
+        artist, title = song
+
+        status, match = search_gmusic(gmusic_client, artist, title)
+
+        if status == 2:
+            matched_songs.append(match)
+            indicator, colour = "Y", "green"
+        elif status == 1:
+            indicator, colour = "S", "magenta"
         else:
-            print_section_heading("Matching (%d songs)" % len(songs))
+            indicator, colour = "N", "red"
 
-        for song in songs:
-            artist, title = song
+        print_song(artist, title, indicator, colour)
 
-            status, match = search_gmusic(gmusic_client, artist, title)
+    return matched_songs
 
-            if status == 2:
-                # Station playlist
-                if station_name:
-                    playlist_name = "Pandora - " + station_name
-                    pandora_playlists[playlist_name].append(match)
+def match_playlists_with_gmusic(gmusic_client, playlists):
+    """ Match playlists with Google Music """
 
-                pandora_playlists["Pandora"].append(match)
+    matched_playlists = dict()
 
-                indicator, colour = "Y", "green"
-            elif status == 1:
-                indicator, colour = "S", "magenta"
-            else:
-                indicator, colour = "N", "red"
+    for playlist_name, songs in playlists.items():
+        print_section_heading('Matching "%s" (%d songs)' % (playlist_name, len(songs)))
+        matched_songs = match_songs_with_gmusic(gmusic_client, songs)
+        matched_playlists[playlist_name] = matched_songs
 
-            print_song(artist, title, indicator, colour)
-
-    return pandora_playlists
+    return matched_playlists
 
 def sync_gmusic_playlists(client, playlists):
     """ Sync the specified playlists with the playlists on Google Music """
@@ -338,16 +338,21 @@ def pandora_to_google_music(pandora_email, pandora_password, gmusic_email, gmusi
     # Get Pandora stations
     pandora_stations = set(pandora_client.stations())
 
-    # Move songs from deleted stations to the main playlist
-    for station in list(pandora_likes.keys()):
-        # Station has been deleted
-        if station not in pandora_stations:
-            # Move the songs
-            pandora_likes[None].extend(pandora_likes[station])
-            del pandora_likes[station]
+    pandora_playlists = defaultdict(list)
+
+    # Copy all songs to main playlist
+    # Add Pandora prefix to playlist names
+    # Remove deleted stations (songs will be in main playlist)
+    for station_name, songs in pandora_likes.items():
+        # Copy songs to main playlist
+        pandora_playlists["Pandora"].extend(songs)
+
+        # Check station hasn't been deleted
+        if station_name in pandora_stations:
+            pandora_playlists["Pandora - %s" % station_name] = songs
 
     # Match Pandora likes with Google Music
-    playlists = match_pandora_with_gmusic(pandora_likes, gmusic_client)
+    playlists = match_playlists_with_gmusic(gmusic_client, pandora_playlists)
     gmusic_match_count = len(playlists.get("Pandora", []))
 
     # Sync Google Music playlists
