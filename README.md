@@ -24,7 +24,8 @@ pip install -r requirements.txt
 ```bash
 python pandora_to_google_music.py
 ```
-As the script I will:
+
+The script will:
 
 1. Ask for your Pandora and Google Music login details
 1. Scrape your likes from Pandora
