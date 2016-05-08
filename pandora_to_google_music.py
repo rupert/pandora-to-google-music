@@ -67,7 +67,6 @@ class PandoraClient(object):
                     # Bookmarked track
                     station_name = None
 
-
                 tracks[station_name].append((artist, title))
 
                 print_song(artist, title)
@@ -80,7 +79,6 @@ class PandoraClient(object):
                 thumb_start_index = more_elements[0].get("data-nextthumbstartindex")
             else:
                 more_pages = False
-
 
             page += 1
 
