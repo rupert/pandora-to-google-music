@@ -10,7 +10,7 @@ oauth2client==1.2
 proboscis==1.2.6.0
 protobuf==2.6.0
 python-dateutil==2.2
-requests==2.4.1
+requests==2.10.0
 six==1.8.0
 termcolor==1.1.0
 validictory==0.9.3
