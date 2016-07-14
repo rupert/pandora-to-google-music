@@ -1,7 +1,7 @@
 Unidecode==0.04.16
 appdirs==1.4.0
 decorator==3.4.0
-git+git://github.com/simon-weber/Unofficial-Google-Music-API.git#egg=gmusicapi
+git+git://github.com/simon-weber/gmusicapi.git#egg=gmusicapi
 httplib2==0.9
 lxml==3.4.0
 mock==1.0.1

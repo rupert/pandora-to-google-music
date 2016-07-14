@@ -194,7 +194,7 @@ def search_gmusic(gmusic_client, artist, title):
 
     for search_artist, search_title in metadata_normaliser(artist, title):
         search_string = search_artist + " " + search_title
-        results = gmusic_client.search_all_access(search_string)["song_hits"]
+        results = gmusic_client.search(search_string)["song_hits"]
 
         for result in results:
             gmusic_artist = result["track"]["artist"]
@@ -325,7 +325,7 @@ def pandora_to_google_music(pandora_email, pandora_password, gmusic_email, gmusi
     """ Sync Pandora likes with Google Music playlists """
 
     gmusic_client = Mobileclient()
-    gmusic_client.login(gmusic_email, gmusic_password)
+    gmusic_client.login(gmusic_email, gmusic_password, Mobileclient.FROM_MAC_ADDRESS)
 
     pandora_client = PandoraClient(pandora_email, pandora_password)
 
