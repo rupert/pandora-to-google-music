@@ -1,7 +1,7 @@
 Unidecode==0.04.16
 appdirs==1.4.0
 decorator==3.4.0
-git+git://github.com/simon-weber/Unofficial-Google-Music-API.git#egg=gmusicapi
+git+git://github.com/simon-weber/gmusicapi.git#egg=gmusicapi
 httplib2==0.9
 lxml==3.4.0
 mock==1.0.1
@@ -10,7 +10,7 @@ oauth2client==1.2
 proboscis==1.2.6.0
 protobuf==2.6.0
 python-dateutil==2.2
-requests==2.4.1
+requests==2.10.0
 six==1.8.0
 termcolor==1.1.0
 validictory==0.9.3
